@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,7 +29,6 @@ class _SampleVaultRootState extends State<SampleVaultRoot> {
     _initFirebase = _initializeWithSplashDelay();
   }
 
-  // Smooth delay so the record splash can be appreciated before transitioning
   Future<FirebaseApp> _initializeWithSplashDelay() async {
     final app = await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -94,7 +94,6 @@ class VaultSplashScreen extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background vinyl artwork
           Opacity(
             opacity: 0.35,
             child: Image.asset(
@@ -201,15 +200,17 @@ class _VaultHomeScreenState extends State<VaultHomeScreen> {
       FirebaseFirestore.instance.collection('samples');
 
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final ScrollController _scrollController = ScrollController();
+  StreamSubscription? _playerStateSubscription;
+
   String? _activeUrl;
   PlayerState _playerState = PlayerState.stopped;
-
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _audioPlayer.onPlayerStateChanged.listen((state) {
+    _playerStateSubscription = _audioPlayer.onPlayerStateChanged.listen((state) {
       if (mounted) {
         setState(() {
           _playerState = state;
@@ -223,7 +224,9 @@ class _VaultHomeScreenState extends State<VaultHomeScreen> {
 
   @override
   void dispose() {
+    _playerStateSubscription?.cancel();
     _audioPlayer.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -769,6 +772,8 @@ class _VaultHomeScreenState extends State<VaultHomeScreen> {
           }
 
           return ListView.separated(
+            key: const PageStorageKey<String>('sample_vault_list'),
+            controller: _scrollController,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             itemCount: docs.length,
             separatorBuilder: (_, __) => const SizedBox(height: 16),
@@ -992,8 +997,9 @@ class SamplePairCard extends StatelessWidget {
                       color: isDark ? const Color(0xFFFBBF24) : Colors.amber.shade800,
                       letterSpacing: 1.1,
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  
+                  overflow: TextOverflow.ellipsis,
+                ),
                 ),
               ],
             ),
@@ -1100,16 +1106,25 @@ class StreamProgressBar extends StatefulWidget {
 class _StreamProgressBarState extends State<StreamProgressBar> {
   Duration _position = Duration.zero;
   Duration _duration = const Duration(seconds: 30);
+  StreamSubscription? _posSub;
+  StreamSubscription? _durSub;
 
   @override
   void initState() {
     super.initState();
-    widget.audioPlayer.onPositionChanged.listen((p) {
+    _posSub = widget.audioPlayer.onPositionChanged.listen((p) {
       if (mounted) setState(() => _position = p);
     });
-    widget.audioPlayer.onDurationChanged.listen((d) {
+    _durSub = widget.audioPlayer.onDurationChanged.listen((d) {
       if (mounted) setState(() => _duration = d);
     });
+  }
+
+  @override
+  void dispose() {
+    _posSub?.cancel();
+    _durSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -1136,7 +1151,7 @@ class _StreamProgressBarState extends State<StreamProgressBar> {
             ),
             const Text(
               '0:30',
-              style: TextStyle(fontSize: 9, color: Colors.grey),
+              style: const TextStyle(fontSize: 9, color: Colors.grey),
             ),
           ],
         ),
